@@ -16,6 +16,7 @@
  */
 package org.nuxeo.lib.stream.tests.pattern;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Path;
 
@@ -35,7 +36,7 @@ public class TestPatternBoundedQueuingChronicle extends TestPatternBoundedQueuin
     }
 
     @Rule
-    public TemporaryFolder folder = new TemporaryFolder();
+    public TemporaryFolder folder = new TemporaryFolder(new File("target"));
 
     @After
     public void resetBasePath() throws IOException {
