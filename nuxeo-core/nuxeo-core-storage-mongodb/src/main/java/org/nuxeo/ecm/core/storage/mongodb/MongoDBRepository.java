@@ -879,14 +879,4 @@ public class MongoDBRepository extends DBSRepositoryBase {
         }
     }
 
-    @Override
-    public void closeLockManager() {
-        // nothing to do
-    }
-
-    @Override
-    public void clearLockManagerCaches() {
-        // nothing to do
-    }
-
 }
