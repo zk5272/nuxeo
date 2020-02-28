@@ -592,6 +592,16 @@ public class DefaultFileSystemItemFactoryFixture {
         // As Administrator
         assertTrue(fileItem.getCanUpdate());
 
+        // ------------------------------------------------------------
+        // FileItem#size
+        // ------------------------------------------------------------
+        // Check the file
+        assertEquals(file.getAdapter(BlobHolder.class).getBlob().getLength(), fileItem.getSize());
+        assertEquals("Content of Joe's file.".length(), fileItem.getSize());
+        // Check the note
+        assertEquals("Content of Bob's note.".length(), noteItem.getSize());
+        assertEquals(note.getAdapter(BlobHolder.class).getBlob().getLength(), noteItem.getSize());
+
         // As a user with READ permission
         DocumentModel rootDoc = session.getRootDocument();
         setPermission(rootDoc, "joe", SecurityConstants.READ, true);

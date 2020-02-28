@@ -15,6 +15,7 @@
  *
  * Contributors:
  *     Florent Guillaume
+ *     Mickaël Schoentgen
  */
 package org.nuxeo.drive.adapter.impl;
 
@@ -39,6 +40,9 @@ public class SimpleFileSystemItem extends AbstractFileSystemItem {
     protected boolean canCreateChild;
 
     protected boolean canScrollDescendants;
+
+    /** @since 11.1 */
+    protected long size;
 
     public String getDownloadURL() {
         return downloadURL;
@@ -74,6 +78,11 @@ public class SimpleFileSystemItem extends AbstractFileSystemItem {
 
     public void setDigest(String digest) {
         this.digest = digest;
+    }
+
+    /** @since 11.1 */
+    public void setSize(long size) {
+        this.size = size;
     }
 
     public void setCanUpdate(boolean canUpdate) {
