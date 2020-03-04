@@ -97,12 +97,6 @@ public class ConnectBroker {
 
     private static final Log log = LogFactory.getLog(ConnectBroker.class);
 
-    public static final String PARAM_MP_DIR = "nuxeo.distribution.marketplace.dir";
-
-    public static final String DISTRIBUTION_MP_DIR_DEFAULT = "setupWizardDownloads";
-
-    public static final String PACKAGES_XML = "packages.xml";
-
     public static final String[] POSITIVE_ANSWERS = { "true", "yes", "y" };
 
     protected static final String LAUNCHER_CHANGED_PROPERTY = "launcher.changed";
@@ -116,8 +110,6 @@ public class ConnectBroker {
     private CommandSetInfo cset = new CommandSetInfo();
 
     private String targetPlatform;
-
-    private String distributionMPDir;
 
     private String relax = OPTION_RELAX_DEFAULT;
 
@@ -139,7 +131,6 @@ public class ConnectBroker {
         NuxeoConnectClient.setCallBackHolder(cbHolder);
         targetPlatform = env.getProperty(Environment.DISTRIBUTION_NAME) + "-"
                 + env.getProperty(Environment.DISTRIBUTION_VERSION);
-        distributionMPDir = env.getProperty(PARAM_MP_DIR, DISTRIBUTION_MP_DIR_DEFAULT);
     }
 
     /**
@@ -359,113 +350,6 @@ public class ConnectBroker {
 
     protected boolean isLocalPackageFile(String pkgFile) {
         return (getLocalPackageFile(pkgFile) != null);
-    }
-
-    protected List<String> getDistributionFilenames() {
-        File distributionMPFile = new File(distributionMPDir, PACKAGES_XML);
-        List<String> md5Filenames = new ArrayList<>();
-        // Try to get md5 files from packages.xml
-        DocumentBuilderFactory docFactory = DocumentBuilderFactory.newInstance();
-        docFactory.setNamespaceAware(true);
-        try {
-            DocumentBuilder builder = docFactory.newDocumentBuilder();
-            Document doc = builder.parse(distributionMPFile);
-            XPathFactory xpFactory = XPathFactory.newInstance();
-            XPath xpath = xpFactory.newXPath();
-            XPathExpression expr = xpath.compile("//package/@md5");
-            NodeList nodes = (NodeList) expr.evaluate(doc, XPathConstants.NODESET);
-            for (int i = 0; i < nodes.getLength(); i++) {
-                String md5 = nodes.item(i).getNodeValue();
-                if ((md5 != null) && (md5.length() > 0)) {
-                    md5Filenames.add(md5);
-                }
-            }
-        } catch (Exception e) {
-            // Parsing failed - return empty list
-            log.error("Failed parsing " + distributionMPFile, e);
-            return new ArrayList<>();
-        }
-        return md5Filenames;
-    }
-
-    protected Map<String, PackageDefinition> getDistributionDefinitions(List<String> md5Filenames) {
-        Map<String, PackageDefinition> allDefinitions = new HashMap<>();
-        if (md5Filenames == null) {
-            return allDefinitions;
-        }
-        for (String md5Filename : md5Filenames) {
-            File md5File = new File(distributionMPDir, md5Filename);
-            if (!md5File.exists()) {
-                // distribution file has been deleted
-                continue;
-            }
-            try (ZipFile zipFile = new ZipFile(md5File)) {
-                ZipEntry zipEntry = zipFile.getEntry("package.xml");
-                PackageDefinition pd;
-                try (InputStream in = zipFile.getInputStream(zipEntry)) {
-                    pd = NuxeoConnectClient.getPackageUpdateService().loadPackage(in);
-                }
-                allDefinitions.put(md5Filename, pd);
-            } catch (IOException e) {
-                log.warn("Could not read file " + md5File, e);
-                continue;
-            } catch (PackageException e) {
-                log.error("Could not read package description", e);
-                continue;
-            }
-        }
-        return allDefinitions;
-    }
-
-    protected boolean addDistributionPackage(String md5) {
-        boolean ret = true;
-        File distributionFile = new File(distributionMPDir, md5);
-        if (distributionFile.exists()) {
-            try {
-                ret = pkgAdd(distributionFile.getCanonicalPath(), false) != null;
-            } catch (IOException e) {
-                log.warn("Could not add distribution file " + md5);
-                ret = false;
-            }
-        }
-        return ret;
-    }
-
-    public boolean addDistributionPackages() {
-        Map<String, PackageDefinition> distributionPackages = getDistributionDefinitions(getDistributionFilenames());
-        if (distributionPackages.isEmpty()) {
-            return true;
-        }
-        List<LocalPackage> localPackages = getPkgList();
-        Map<String, LocalPackage> localPackagesById = new HashMap<>();
-        if (localPackages != null) {
-            for (LocalPackage pkg : localPackages) {
-                localPackagesById.put(pkg.getId(), pkg);
-            }
-        }
-        boolean ret = true;
-        for (String md5 : distributionPackages.keySet()) {
-            PackageDefinition md5Pkg = distributionPackages.get(md5);
-            if (localPackagesById.containsKey(md5Pkg.getId())) {
-                // We have the same package Id in the local cache
-                LocalPackage localPackage = localPackagesById.get(md5Pkg.getId());
-                if (localPackage.getVersion().isSnapshot()) {
-                    // - For snapshots, until we have timestamp support, assume
-                    // distribution version is newer than cached version.
-                    // - This may (will) break the server if there are
-                    // dependencies/compatibility changes or if the package is
-                    // in installed state.
-                    if (!localPackage.getPackageState().isInstalled()) {
-                        pkgRemove(localPackage.getId());
-                        ret = addDistributionPackage(md5) && ret;
-                    }
-                }
-            } else {
-                // No package with this Id is in cache
-                ret = addDistributionPackage(md5) && ret;
-            }
-        }
-        return ret;
     }
 
     public List<LocalPackage> getPkgList() {
@@ -1073,16 +957,10 @@ public class ConnectBroker {
                 } else if (split.length == 1) {
                     if (line.length() > 0 && !line.startsWith("#")) {
                         if (doExecute) {
-                            if ("init".equals(line)) {
-                                if (!addDistributionPackages()) {
-                                    errorValue = 1;
-                                }
+                            if (useResolver) {
+                                pkgsToInstall.add(line);
                             } else {
-                                if (useResolver) {
-                                    pkgsToInstall.add(line);
-                                } else {
-                                    pkgInstall(line, ignoreMissing);
-                                }
+                                pkgInstall(line, ignoreMissing);
                             }
                         } else {
                             if ("init".equals(line)) {

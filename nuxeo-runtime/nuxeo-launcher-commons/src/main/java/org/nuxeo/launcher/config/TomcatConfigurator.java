@@ -122,52 +122,6 @@ public class TomcatConfigurator extends ServerConfigurator {
     }
 
     @Override
-    public void prepareWizardStart() {
-        try {
-            // remove Tomcat configuration of Nuxeo context
-            File contextXML = new File(generator.getNuxeoHome(), getTomcatConfig());
-            contextXML.delete();
-
-            // deploy wizard WAR
-            File wizardWAR = new File(generator.getNuxeoHome(), "templates" + File.separator + "nuxeo-wizard.war");
-            File nuxeoWAR = new File(generator.getNuxeoHome(), "webapps" + File.separator + getContextName() + ".war");
-            nuxeoWAR.delete();
-            FileUtils.copyFile(wizardWAR, nuxeoWAR);
-        } catch (IOException e) {
-            log.error("Could not change Tomcat configuration to run wizard instead of Nuxeo.", e);
-        }
-    }
-
-    @Override
-    public void cleanupPostWizard() {
-        File nuxeoWAR = new File(generator.getNuxeoHome(), "webapps" + File.separator + getContextName());
-        if (nuxeoWAR.exists()) {
-            try {
-                FileUtils.deleteDirectory(nuxeoWAR);
-            } catch (IOException e) {
-                log.error("Could not delete " + nuxeoWAR, e);
-            }
-        }
-        nuxeoWAR = new File(nuxeoWAR.getPath() + ".war");
-        if (nuxeoWAR.exists()) {
-            if (!FileUtils.deleteQuietly(nuxeoWAR)) {
-                log.warn("Could not delete " + nuxeoWAR);
-                try {
-                    nuxeoWAR.deleteOnExit();
-                } catch (SecurityException e) {
-                    log.warn("Cannot delete " + nuxeoWAR);
-                }
-            }
-        }
-    }
-
-    @Override
-    public boolean isWizardAvailable() {
-        File wizardWAR = new File(generator.getNuxeoHome(), "templates" + File.separator + "nuxeo-wizard.war");
-        return wizardWAR.exists();
-    }
-
-    @Override
     public File getRuntimeHome() {
         return new File(generator.getNuxeoHome(), "nxserver");
     }
