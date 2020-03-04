@@ -32,7 +32,10 @@ import static org.nuxeo.ecm.platform.comment.api.CommentConstants.MIGRATION_STEP
 import static org.nuxeo.ecm.platform.comment.api.CommentConstants.MIGRATION_STEP_RELATION_TO_PROPERTY;
 import static org.nuxeo.ecm.platform.comment.impl.AbstractCommentManager.COMMENTS_DIRECTORY;
 import static org.nuxeo.ecm.platform.comment.impl.PropertyCommentManager.HIDDEN_FOLDER_TYPE;
+import static org.nuxeo.ecm.platform.comment.workflow.utils.CommentsConstants.COMMENTS_DIRECTORY_NAME;
+import static org.nuxeo.ecm.platform.comment.workflow.utils.CommentsConstants.COMMENTS_DIRECTORY_TYPE;
 import static org.nuxeo.ecm.platform.comment.workflow.utils.CommentsConstants.COMMENT_PARENT_ID;
+import static org.nuxeo.ecm.platform.comment.workflow.utils.CommentsConstants.COMMENT_SCHEMA;
 import static org.nuxeo.ecm.platform.ec.notification.NotificationConstants.DISABLE_NOTIFICATION_SERVICE;
 
 import java.util.ArrayList;
@@ -52,7 +55,6 @@ import org.nuxeo.ecm.core.api.DocumentModel;
 import org.nuxeo.ecm.core.api.DocumentRef;
 import org.nuxeo.ecm.core.api.IdRef;
 import org.nuxeo.ecm.core.api.NuxeoException;
-import org.nuxeo.ecm.core.api.PathRef;
 import org.nuxeo.ecm.core.api.security.ACP;
 import org.nuxeo.ecm.core.migrator.AbstractRepositoryMigrator;
 import org.nuxeo.ecm.core.repository.RepositoryService;
@@ -263,7 +265,7 @@ public class CommentsMigrator extends AbstractRepositoryMigrator {
 
         DocumentModel parentDoc = session.getDocument(parentDocRef);
 
-        DocumentRef destination = new PathRef(commentManager.getLocationOfCommentCreation(session, parentDoc));
+        DocumentRef destination = getLocationOfCommentCreation(session, parentDoc);
 
         // Move the commentIdRef under the new destination (under the `Comments` folder in the case of the first comment
         // or under the comment itself in the case of reply)
@@ -274,11 +276,28 @@ public class CommentsMigrator extends AbstractRepositoryMigrator {
 
         // Strip ACLs
         ACP acp = session.getACP(commentIdRef);
-        acp.removeACL(LOCAL_ACL);
-        session.setACP(commentIdRef, acp, true);
+        // acp can be null in the case where the comment is on a placeless document
+        if (acp != null) {
+            acp.removeACL(LOCAL_ACL);
+            session.setACP(commentIdRef, acp, true);
+        }
 
         session.saveDocument(commentDoc);
         session.save();
+    }
+
+    /** @since 10.10-HF23 **/
+    protected IdRef getLocationOfCommentCreation(CoreSession session, DocumentModel commentedDoc) {
+        if (commentedDoc.hasSchema(COMMENT_SCHEMA)) {
+            return new IdRef(commentedDoc.getId());
+        }
+        DocumentModel commentsFolder = session.newDocumentModel(new IdRef(commentedDoc.getId()),
+                COMMENTS_DIRECTORY_NAME, COMMENTS_DIRECTORY_TYPE);
+        commentsFolder.putContextData(DISABLE_NOTIFICATION_SERVICE, TRUE);
+        commentsFolder = session.getOrCreateDocument(commentsFolder);
+        session.save();
+        return new IdRef(commentsFolder.getId());
+
     }
 
     /**
