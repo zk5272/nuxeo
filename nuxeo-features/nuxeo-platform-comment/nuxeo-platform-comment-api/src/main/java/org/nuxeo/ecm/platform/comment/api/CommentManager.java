@@ -362,5 +362,17 @@ public interface CommentManager {
         throw new UnsupportedOperationException();
     }
 
+    /**
+     * Returns the {@link DocumentRef} of the document model which contains the comments of the given commented document
+     * model.
+     *
+     * @param session the session needs to be privileged
+     * @return the document ref of the document container
+     * @apiNote This is dedicated to an internal usage (comment service/migration)
+     * @since 10.10-HF23
+     */
+    default DocumentRef getDocumentRefContainerOfCommentCreation(CoreSession session, DocumentModel commentedDocModel) {
+        throw new UnsupportedOperationException();
+    }
 
 }
