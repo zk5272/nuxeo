@@ -27,7 +27,6 @@ import static org.nuxeo.ecm.core.api.security.SecurityConstants.ADD_CHILDREN;
 import static org.nuxeo.ecm.core.api.security.SecurityConstants.BROWSE;
 import static org.nuxeo.ecm.core.api.security.SecurityConstants.MAKE_RECORD;
 import static org.nuxeo.ecm.core.api.security.SecurityConstants.MANAGE_LEGAL_HOLD;
-import static org.nuxeo.ecm.core.api.security.SecurityConstants.SET_RETENTION;
 import static org.nuxeo.ecm.core.api.security.SecurityConstants.READ;
 import static org.nuxeo.ecm.core.api.security.SecurityConstants.READ_CHILDREN;
 import static org.nuxeo.ecm.core.api.security.SecurityConstants.READ_LIFE_CYCLE;
@@ -36,6 +35,7 @@ import static org.nuxeo.ecm.core.api.security.SecurityConstants.READ_SECURITY;
 import static org.nuxeo.ecm.core.api.security.SecurityConstants.READ_VERSION;
 import static org.nuxeo.ecm.core.api.security.SecurityConstants.REMOVE;
 import static org.nuxeo.ecm.core.api.security.SecurityConstants.REMOVE_CHILDREN;
+import static org.nuxeo.ecm.core.api.security.SecurityConstants.SET_RETENTION;
 import static org.nuxeo.ecm.core.api.security.SecurityConstants.UNLOCK;
 import static org.nuxeo.ecm.core.api.security.SecurityConstants.WRITE;
 import static org.nuxeo.ecm.core.api.security.SecurityConstants.WRITE_LIFE_CYCLE;
@@ -84,6 +84,7 @@ import org.nuxeo.ecm.core.api.trash.TrashService;
 import org.nuxeo.ecm.core.api.validation.DocumentValidationException;
 import org.nuxeo.ecm.core.api.validation.DocumentValidationReport;
 import org.nuxeo.ecm.core.api.validation.DocumentValidationService;
+import org.nuxeo.ecm.core.api.versioning.VersioningService;
 import org.nuxeo.ecm.core.event.Event;
 import org.nuxeo.ecm.core.event.EventService;
 import org.nuxeo.ecm.core.event.impl.DocumentEventContext;
@@ -102,7 +103,6 @@ import org.nuxeo.ecm.core.schema.SchemaManager;
 import org.nuxeo.ecm.core.schema.types.CompositeType;
 import org.nuxeo.ecm.core.schema.types.Schema;
 import org.nuxeo.ecm.core.security.SecurityService;
-import org.nuxeo.ecm.core.api.versioning.VersioningService;
 import org.nuxeo.runtime.api.Framework;
 import org.nuxeo.runtime.metrics.MetricsService;
 import org.nuxeo.runtime.services.config.ConfigurationService;
@@ -616,12 +616,16 @@ public abstract class AbstractSession implements CoreSession, Serializable {
     }
 
     private DocumentModel createDocumentModelFromTypeName(String typeName, Map<String, Serializable> options) {
-        SchemaManager schemaManager = Framework.getService(SchemaManager.class);
-        DocumentType docType = schemaManager.getDocumentType(typeName);
+        return createDocumentModelByParentAndType(null, typeName, options);
+    }
+
+    private DocumentModel createDocumentModelByParentAndType(DocumentRef parentRef, String typeName,
+            Map<String, Serializable> options) {
+        DocumentType docType = Framework.getService(SchemaManager.class).getDocumentType(typeName);
         if (docType == null) {
             throw new IllegalArgumentException(typeName + " is not a registered core type");
         }
-        DocumentModel docModel = DocumentModelFactory.createDocumentModel(getSessionId(), docType);
+        DocumentModel docModel = DocumentModelFactory.createDocumentModel(getSessionId(), docType, parentRef);
         if (options == null) {
             options = new HashMap<>();
         }
@@ -2670,6 +2674,22 @@ public abstract class AbstractSession implements CoreSession, Serializable {
             }
             return postCreate.apply(createDocument(docModel));
         });
+    }
+
+    @Override
+    public DocumentModel newDocumentModel(DocumentRef parentRef, String name, String typeName) {
+        if (parentRef == null && name == null) {
+            return createDocumentModel(typeName);
+        }
+
+        Document parentDocument = resolveReference(parentRef);
+        Map<String, Serializable> options = new HashMap<>();
+        options.put(CoreEventConstants.PARENT_PATH, parentDocument.getPath());
+        options.put(CoreEventConstants.DOCUMENT_MODEL_ID, name);
+        options.put(CoreEventConstants.DESTINATION_NAME, name);
+        DocumentModel model = createDocumentModelByParentAndType(parentRef, typeName, options);
+        model.setPathInfo(parentDocument.getPath(), name);
+        return model;
     }
 
     protected String computeKeyForAtomicCreation(DocumentModel docModel) {

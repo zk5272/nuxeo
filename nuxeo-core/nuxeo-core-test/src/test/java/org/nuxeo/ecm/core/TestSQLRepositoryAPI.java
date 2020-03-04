@@ -272,6 +272,51 @@ public class TestSQLRepositoryAPI {
         assertEquals(cal, modified);
     }
 
+    /*
+     * NXP-28727
+     */
+    @Test
+    public void testBasicsCreateDocsWithHierarchy() {
+        DocumentModel root = session.getRootDocument();
+
+        // create the parent doc under the root
+        DocumentModel parent = session.newDocumentModel(new PathRef("/"), "domain", "MyDocType");
+        Calendar parentModifTime = GregorianCalendar.getInstance();
+        parent.setProperty("dublincore", "title", "Title of parent");
+        parent.setProperty("dublincore", "modified", parentModifTime);
+        parent = session.createDocument(parent);
+
+        // create the child doc under the parent
+        DocumentModel child = session.newDocumentModel(parent.getRef(), "anyFile", "File");
+        Calendar childModifTime = GregorianCalendar.getInstance();
+        child.setProperty("dublincore", "title", "Title of child");
+        child.setProperty("dublincore", "description", "Description of child");
+        child.setProperty("dublincore", "modified", childModifTime);
+        child = session.createDocument(child);
+
+        session.save();
+
+        // open a new session to make the check
+        reopenSession();
+
+        assertEquals(root.getRef(), parent.getParentRef());
+        assertEquals("Title of parent", parent.getProperty("dublincore", "title"));
+        assertNull(parent.getProperty("dublincore", "description"));
+        assertEquals(parentModifTime, parent.getProperty("dublincore", "modified"));
+
+        assertEquals(parent.getRef(), child.getParentRef());
+        assertEquals("Title of child", child.getProperty("dublincore", "title"));
+        assertEquals("Description of child", child.getProperty("dublincore", "description"));
+        assertEquals(childModifTime, child.getProperty("dublincore", "modified"));
+
+        // remove the parent
+        session.removeDocument(parent.getRef());
+        session.save();
+
+        assertFalse("parent should be removed", session.exists(parent.getRef()));
+        assertFalse("child should be removed", session.exists(child.getRef()));
+    }
+
     @Test
     public void testLists() {
         DocumentModel root = session.getRootDocument();
@@ -4015,6 +4060,38 @@ public class TestSQLRepositoryAPI {
         // remove
         session.removeDocument(doc.getRef());
         session.save();
+    }
+
+    /*
+     * NXP-28727
+     */
+    @Test
+    public void testCreateDocumentUnderPlacelessDoc() {
+        DocumentModel parentFile = session.createDocumentModel(null, "parentFile", "File");
+        parentFile = session.createDocument(parentFile);
+        assertNull(parentFile.getParentRef());
+        session.save();
+
+        DocumentModel childFile = session.newDocumentModel(parentFile.getRef(), "childFile", "File");
+        childFile = session.createDocument(childFile);
+        session.save();
+
+        reopenSession();
+
+        // the parent file must be a placeless
+        parentFile = session.getDocument(new IdRef(parentFile.getId()));
+        assertNull(parentFile.getParentRef());
+
+        // the child file mustn't be a placeless
+        childFile = session.getDocument(new IdRef(childFile.getId()));
+        assertEquals(parentFile.getRef(), childFile.getParentRef());
+
+        // remove the parent
+        session.removeDocument(parentFile.getRef());
+        session.save();
+
+        assertFalse("parentFile should be removed", session.exists(parentFile.getRef()));
+        assertFalse("childFile should be removed", session.exists(childFile.getRef()));
     }
 
     @Test
